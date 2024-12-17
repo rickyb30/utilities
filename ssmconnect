@@ -1,0 +1,116 @@
+#!/bin/bash
+
+unset user
+unset instanceid
+unset service
+unset localport
+unset remoteport
+unset remotehost
+
+if [ -z "$AWS_PROFILE" ]; then
+   echo "Environment variable AWS_PROFILE not set. Exiting..."
+   exit 1
+fi
+
+#Generate random number for SSH key
+ssh_key="$RANDOM"
+
+Help()
+{
+   # Display Help
+   echo "ssmconnect is a utility to connect to private resources in a VPC using SSM tunnel"
+   echo
+   echo "Syntax: ssmconnect [-u|i|s|H|l|r|h]"
+   echo "options:"
+   echo "u     OS username of remote instance."
+   echo "i     EC2 instance id."
+   echo "s     AWS service name. valid values are ec2, rds and redshift. Default is ec2"
+   echo "l     Local port number if service is rds or redshift."
+   echo "r     Remote port number if service is rds or redshift."
+   echo "H     Remote hostname if service is rds or redshift."
+   echo "h     Print help."
+   echo
+}
+
+# Get the options
+while getopts "u:i:s:l:r:H:h" opt; do
+   case $opt in
+      h) # display Help
+         Help
+         exit;;
+      u) user=$OPTARG ;;
+      i) instance_id=$OPTARG ;;
+      s) service=$OPTARG ;;
+      l) localport=$OPTARG ;;
+      r) remoteport=$OPTARG ;;
+      H) remotehost=$OPTARG ;;
+     \?) # incorrect option
+         echo "Error: Invalid option"
+         exit;;
+   esac
+done
+
+if [ -z "$user" ] || [ -z "$instance_id" ]; then
+   echo "Missing username or instanceid. Exiting..." >&2
+   exit 1
+fi
+
+
+getAZ()
+{
+   #az="$(aws ec2 describe-instances --instance-id "${instance_id}" | jq -r '.Reservations[0].Instances[0].Placement.AvailabilityZone')"
+   az="$(aws ec2 describe-instances --instance-id "${instance_id}" --output text --query 'Reservations[0].Instances[0].Placement.AvailabilityZone')"
+   echo $az
+}
+
+cleanup()
+{
+   rm -rf $ssh_key*
+}
+
+ec2Tunnel()
+{
+   az="$(getAZ)"
+   echo -e 'y\n' | ssh-keygen -t rsa -f $ssh_key -N '' >/dev/null 2>&1
+   aws ec2-instance-connect send-ssh-public-key \
+   --instance-id  $instance_id \
+   --availability-zone $az \
+   --instance-os-user $user \
+   --ssh-public-key file://"$ssh_key.pub"
+   ssh -i $ssh_key \
+   -o "IdentitiesOnly=yes" \
+   -o "UserKnownHostsFile=/dev/null" \
+   -o "StrictHostKeyChecking=no" \
+   -o ProxyCommand="aws ssm start-session --target %h --document AWS-StartSSHSession --parameters portNumber=%p" \
+   $user@$instance_id
+}
+
+dbTunnel()
+{
+   az="$(getAZ)"
+   echo -e 'y\n' | ssh-keygen -t rsa -f $ssh_key -N '' >/dev/null 2>&1
+   aws ec2-instance-connect send-ssh-public-key \
+   --instance-id  $instance_id \
+   --availability-zone $az \
+   --instance-os-user $user \
+   --ssh-public-key file://"$ssh_key.pub"
+   ssh -i $ssh_key \
+   -L $localport:$remotehost:$remoteport \
+   -o "IdentitiesOnly=yes" \
+   -o "UserKnownHostsFile=/dev/null" \
+   -o "StrictHostKeyChecking=no" \
+   -o ProxyCommand="aws ssm start-session --target %h --document AWS-StartSSHSession --parameters portNumber=%p" \
+   $user@$instance_id
+   
+}
+
+if [ "$service" = "" ] || [ "$service" == "ec2" ]; then
+   ec2Tunnel
+   cleanup
+fi
+
+if [ "$service" = "rds" ] || [ "$service" == "redshift" ]; then
+   dbTunnel
+   cleanup
+fi
+
