@@ -19,3 +19,24 @@ r     Remote port number if service is rds or redshift.
 H     Remote hostname if service is rds or redshift.
 h     Print help.
 ```
+**Example**
+* Login to bastion host
+```
+[terminal #  %] ./ssmconnect -u ec2-user -i i-0866d895846a422a9 
+{
+    "RequestId": "0d4e5e07-790e-43ba-8c94-b831a60fb9f2",
+    "Success": true
+}
+Warning: Permanently added 'i-0866d895846a422a9' (ED25519) to the list of known hosts.
+   ,     #_
+   ~\_  ####_        Amazon Linux 2023
+  ~~  \_#####\
+  ~~     \###|
+  ~~       \#/ ___   https://aws.amazon.com/linux/amazon-linux-2023
+   ~~       V~' '->
+    ~~~         /
+      ~~._.   _/
+         _/ _/
+       _/m/'
+[ec2-user@ip-10-0-135-123 ~]$
+```
