@@ -1,7 +1,0 @@
-name: Statement Reconciler
-purpose: Match bank statements against ledger entries and flag discrepancies
-owner: ricky@cloudprodigy.ca
-platform: github
-tools:
-  - fetch_statement
-  - run_sql
